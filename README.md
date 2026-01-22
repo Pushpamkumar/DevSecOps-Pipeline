@@ -68,39 +68,11 @@ This project demonstrates complete DevSecOps integration including:
 - Best practices documentation
 - Troubleshooting (20+ solutions)
 
-## 📁 Project Structure
+---
+
+## 🏗️ How It Works - The Architecture
 
 ```
-devsecops-ml-pipeline/
-├── ml-service/                      # ML service application
-│   ├── app.py                       # Insecure app (demo)
-│   ├── inference.py                 # Secure inference (best practice)
-│   ├── requirements.txt              # Vulnerable dependencies
-│   └── requirements-secure.txt       # Secure dependencies
-├── docker/                          # Docker configurations
-│   ├── Dockerfile.insecure          # Insecure example (demo)
-│   ├── Dockerfile.secure            # Secure best practices
-│   ├── docker-compose.yml           # Compose configuration
-│   └── build-*.sh                   # Build scripts
-├── ci-config/                       # CI/CD configurations
-│   ├── .gitlab-ci.yml               # GitLab CI pipeline
-│   └── security.yml                 # GitHub Actions workflow
-├── security/                        # Security policies
-│   ├── trivy.yaml                   # Trivy configuration
-│   ├── anchore-policy.yaml          # Anchore policies
-│   └── .trivyignore                 # CVE exemptions
-├── scripts/                         # Automation scripts
-│   ├── scan-local.sh                # Local scanning
-│   ├── generate-report.py           # Report generation
-│   └── check-dependencies.py        # Dependency checking
-└── docs/                            # Documentation
-    ├── README.md                    # Complete guide
-    ├── SETUP.md                     # Setup instructions
-    ├── VULNERABILITIES.md           # Vulnerability reference
-    └── POLICY-RULES.md              # Policy configuration
-```
-
-🏗️ How It Works - The Architecture
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Development Phase                             │
 │  Write Code → Commit → Push to Git Repository                   │
@@ -134,6 +106,64 @@ devsecops-ml-pipeline/
       ✅ PASS                        ❌ FAIL
       Deploy to                  Block Deployment
       Registry                   Report Issues
+      
+```
+
+### Pipeline Stages Explained
+
+**ANALYZE Stage:**
+- Python dependency checking with `safety`
+- Secret detection with `TruffleHog`
+- Code analysis with `Bandit` and `Semgrep`
+
+**BUILD Stage:**
+- Create Docker images (secure & insecure examples)
+- Tag with version and repository information
+- Prepare for security scanning
+
+**SCAN Stage:**
+- Container vulnerability scanning with `Trivy`
+- Policy enforcement with `Anchore`
+- Generate compliance reports
+
+**PASS/FAIL Decision:**
+- ✅ **PASS:** All security checks pass → Deploy to registry
+- ❌ **FAIL:** Issues found → Block deployment, report problems
+
+---
+
+## 📁 Project Structure
+
+```
+devsecops-ml-pipeline/
+├── ml-service/                      # ML service application
+│   ├── app.py                       # Insecure app (demo)
+│   ├── inference.py                 # Secure inference (best practice)
+│   ├── requirements.txt              # Vulnerable dependencies
+│   └── requirements-secure.txt       # Secure dependencies
+├── docker/                          # Docker configurations
+│   ├── Dockerfile.insecure          # Insecure example (demo)
+│   ├── Dockerfile.secure            # Secure best practices
+│   ├── docker-compose.yml           # Compose configuration
+│   └── build-*.sh                   # Build scripts
+├── ci-config/                       # CI/CD configurations
+│   ├── .gitlab-ci.yml               # GitLab CI pipeline
+│   └── security.yml                 # GitHub Actions workflow
+├── security/                        # Security policies
+│   ├── trivy.yaml                   # Trivy configuration
+│   ├── anchore-policy.yaml          # Anchore policies
+│   └── .trivyignore                 # CVE exemptions
+├── scripts/                         # Automation scripts
+│   ├── scan-local.sh                # Local scanning
+│   ├── generate-report.py           # Report generation
+│   └── check-dependencies.py        # Dependency checking
+└── docs/                            # Documentation
+    ├── README.md                    # Complete guide
+    ├── SETUP.md                     # Setup instructions
+    ├── VULNERABILITIES.md           # Vulnerability reference
+    └── POLICY-RULES.md              # Policy configuration
+```
+
 
 ## 🚀 Quick Start
 

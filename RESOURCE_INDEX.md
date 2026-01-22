@@ -2,11 +2,6 @@
 
 ## All Files in DevSecOps ML Pipeline Project
 
-### 📍 Location
-```
-c:\Users\pushp\OneDrive\Desktop\Reaidy.io-MLOps\devsecops-ml-pipeline\
-```
-
 ---
 
 ## 📄 Root Directory Files
