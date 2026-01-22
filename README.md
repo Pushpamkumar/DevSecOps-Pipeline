@@ -488,8 +488,7 @@ This project is provided for educational and demonstration purposes.
 
 ## 👤 Author
 
-DevSecOps Team
-**Created:** January 21, 2026
+Pushpam Kumar
 
 ## 🙋 Contributing
 
