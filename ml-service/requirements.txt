@@ -14,3 +14,4 @@ pandas==0.11.0  # Data processing with vulnerabilities
 scikit-learn==0.14.1  # ML framework with dependency vulnerabilities
 tensorflow==1.0.0  # CVE-2017-3506 - TensorFlow vulnerability
 cryptography==0.7  # CVE-2015-3206 - ECDSA signature forgery
+click==6.7

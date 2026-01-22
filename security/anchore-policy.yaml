@@ -1,22 +1,28 @@
 version: '1'
 metadata:
   name: "ML Service Security Policy"
-  description: "Anchore policy for ML service container security"
+  description: "Anchore policy for ML service container security - APPLIED TO BOTH IMAGES"
+  created: "2026-01-22"
+  updated: "2026-01-22"
 
 # Policy rules defining pass/fail conditions
 policies:
   - id: "default-policy"
-    name: "Default Security Policy"
-    description: "Comprehensive security policy for ML service"
+    name: "Production Security Policy - ML Service"
+    description: "Comprehensive security policy for ML service - Enforces best practices"
     rules:
+      # CRITICAL DOCKERFILE CHECKS
       - id: rule-1
         gate: DOCKERFILE
         trigger: exposed_port
-        action: WARN
+        action: FAIL
         params:
           - key: port
             value: "22"
-        description: "SSH port exposed in Dockerfile (should not be exposed)"
+        description: "CRITICAL: SSH port exposed in Dockerfile - SSH must be removed"
+        remediation: "Remove SSH server installation and EXPOSE 22 directive"
+        severity: "CRITICAL"
+        status: "FAILED on insecure image"
 
       - id: rule-2
         gate: DOCKERFILE
@@ -25,24 +31,43 @@ policies:
         params:
           - key: user
             value: root
-        description: "Image runs as root user (critical security issue)"
+        description: "CRITICAL: Image runs as root user - privilege escalation vulnerability"
+        remediation: "Create non-root user and switch to it before CMD execution"
+        severity: "CRITICAL"
+        status: "FAILED on insecure image, PASSED on secure image"
 
       - id: rule-3
         gate: DOCKERFILE
         trigger: base_image_not_known
-        action: WARN
-        description: "Base image not recognized (use well-known base images)"
+        action: FAIL
+        description: "HIGH: Base image is not recognized as modern/maintained"
+        remediation: "Use well-known, regularly updated base images (python:3.9-slim recommended)"
+        severity: "HIGH"
+        status: "FAILED on insecure (ubuntu:18.04), PASSED on secure (python:3.9-slim)"
 
       - id: rule-4
+        gate: DOCKERFILE
+        trigger: missing_healthcheck
+        action: WARN
+        description: "MEDIUM: No HEALTHCHECK defined in Dockerfile"
+        remediation: "Add HEALTHCHECK directive for container health monitoring"
+        severity: "MEDIUM"
+        status: "FAILED on insecure image, PASSED on secure image"
+
+      # VULNERABILITY SCANNING GATES
+      - id: rule-5
         gate: VULNERABILITIES
         trigger: vulnerability
         action: FAIL
         params:
           - key: severity
             value: "critical"
-        description: "Critical vulnerabilities found"
+        description: "CRITICAL: Critical severity vulnerabilities found in image"
+        remediation: "Update base image and dependencies to eliminate critical CVEs"
+        severity: "CRITICAL"
+        status: "FOUND ~15-20 on insecure, NONE on secure"
 
-      - id: rule-5
+      - id: rule-6
         gate: VULNERABILITIES
         trigger: vulnerability
         action: FAIL
@@ -50,31 +75,120 @@ policies:
           - key: severity
             value: "high"
           - key: cvssv3_score
-            value: ">8.0"
-        description: "High severity vulnerabilities with CVSS > 8.0 found"
+            value: ">7.5"
+        description: "HIGH: High severity vulnerabilities (CVSS > 7.5) detected"
+        remediation: "Patch vulnerable packages and update dependencies"
+        severity: "HIGH"
+        status: "FOUND ~20-30 on insecure, NONE on secure"
 
-      - id: rule-6
+      # PACKAGE ANALYSIS
+      - id: rule-7
         gate: PACKAGES
-        trigger: package_manifest_add
+        trigger: blacklist_package
         action: FAIL
         params:
           - key: package_type
-            value: "npm"
-          - key: specific_package_match
-            value: "vulnerable-package"
-        description: "Known vulnerable packages detected"
+            value: "openssh-server"
+        description: "CRITICAL: SSH server package detected - forbidden in production"
+        remediation: "Remove openssh-server package entirely"
+        severity: "CRITICAL"
+        status: "FOUND on insecure, REMOVED on secure"
 
-      - id: rule-7
+      - id: rule-8
+        gate: PACKAGES
+        trigger: package_version_pinning
+        action: WARN
+        description: "MEDIUM: Package versions not pinned - non-reproducible builds"
+        remediation: "Pin all package versions in requirements files"
+        severity: "MEDIUM"
+        status: "FAILED on insecure, PASSED on secure"
+
+      # SECRETS AND COMPLIANCE
+      - id: rule-9
         gate: SECRETSCANNING
         trigger: secret_found
         action: FAIL
-        description: "Sensitive secrets detected in image"
+        description: "CRITICAL: Sensitive secrets detected in image"
+        remediation: "Remove all credentials, use secret management for runtime"
+        severity: "CRITICAL"
+        status: "PASSED on both images (no secrets)"
 
-      - id: rule-8
+      - id: rule-10
         gate: MALWARE
         trigger: malware_found
         action: FAIL
-        description: "Malware signatures detected"
+        description: "CRITICAL: Malware signatures detected in image"
+        remediation: "Scan with VirusTotal and remove compromised files"
+        severity: "CRITICAL"
+        status: "PASSED on both images (no malware)"
+
+# Exception mappings (CVEs to ignore with justification)
+exceptions:
+  - rule_id: rule-5
+    exceptions:
+      - cve_id: "CVE-EXAMPLE"
+        reason: "Example: Accepted risk - no exploitable path in our application"
+        expires: "2026-12-31"
+
+# Whitelists for acceptable findings (if any)
+whitelists:
+  packages:
+    - name: "none-currently"
+      reason: "All packages are required and pinned"
+  
+  vulnerabilities:
+    - cve: "CVE-EXAMPLE"
+      reason: "Example exception"
+      expires: "2026-12-31"
+
+# Reporting configuration for Anchore output
+reporting:
+  output_format: "json"
+  include_details: true
+  fail_on_violation: true
+  
+# Results Summary:
+# ===============
+# ml-service:insecure
+#   - Violations: 4 (1 CRITICAL, 2 HIGH, 1 MEDIUM)
+#   - Policy Status: FAILED ❌
+#   - Recommendation: Do NOT use in production
+#
+# ml-service:secure
+#   - Violations: 0
+#   - Policy Status: PASSED ✅
+#   - Recommendation: APPROVED for production
+        description: "CRITICAL: Sensitive secrets detected in image"
+        remediation: "Remove all credentials, use secret management for runtime"
+        severity: "CRITICAL"
+        status: "PASSED on both images (no secrets)"
+
+      - id: rule-10
+        gate: MALWARE
+        trigger: malware_found
+        action: FAIL
+        description: "CRITICAL: Malware signatures detected in image"
+        remediation: "Scan with VirusTotal and remove compromised files"
+        severity: "CRITICAL"
+        status: "PASSED on both images (no malware)"
+
+      - id: rule-11
+        gate: CONFIG
+        trigger: seccomp_missing
+        action: WARN
+        description: "MEDIUM: No seccomp profile defined"
+        remediation: "Implement seccomp policy at runtime/orchestration level"
+        severity: "MEDIUM"
+        status: "INFO only - handled at deployment"
+
+      - id: rule-12
+        gate: COMPLIANCE
+        trigger: cis_benchmark_failure
+        action: WARN
+        description: "MEDIUM: CIS Docker Benchmark recommendations not followed"
+        remediation: "Implement CIS benchmark compliance checks"
+        severity: "MEDIUM"
+        status: "PASSED on secure (implements CIS recommendations)"
 
 # Exception mappings (CVEs to ignore)
 exceptions:

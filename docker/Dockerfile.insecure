@@ -3,57 +3,41 @@
 # to demonstrate how Trivy detects and fails the build
 
 # Use old base image with known vulnerabilities
-FROM ubuntu:16.04
+FROM ubuntu:18.04
 
 LABEL maintainer="devsecops-demo@example.com" \
       description="Intentionally insecure ML service for security scanning demo"
 
-# Install packages without pinning versions (security risk)
+# VULNERABILITY #1: No package version pinning - allows uncontrolled updates
 RUN apt-get update && apt-get install -y \
-    python-pip \
+    python3-pip \
     curl \
     wget \
     git \
-    openssh-client \
     openssh-server \
-    apache2 \
-    && rm -rf /var/lib/apt/lists/*
+    openssh-client
 
-# Enable root SSH login (CRITICAL VULNERABILITY)
+# VULNERABILITY #2: Enable root SSH login (CRITICAL SECURITY RISK)
 RUN echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
 
-# Run SSH as root (SECURITY RISK)
+# VULNERABILITY #3: Create SSH directory as root
 RUN mkdir -p /var/run/sshd
+
+# VULNERABILITY #4: Expose SSH on port 22
+EXPOSE 5000 22
 
 # Create app directory
 WORKDIR /app
 
-# Copy requirements and install with old pip
-COPY ml-service/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# VULNERABILITY #5: Caching pip packages in layer (increases attack surface)
+RUN pip3 install flask==1.1.2 requests==2.22.0
 
 # Copy application code
 COPY ml-service/app.py .
-COPY ml-service/inference.py .
 
-# Create non-privileged user (MISSING - should have this)
-# Should add: RUN useradd -m appuser && chown -R appuser:appuser /app
-
-# Expose ports without documentation
-EXPOSE 5000 22 80
-
-# Run as root (SEVERE SECURITY RISK)
+# VULNERABILITY #6: Running as root user (most critical)
 USER root
 
-# No HEALTHCHECK defined
-# No logging configuration
-
-# Vulnerable CMD with shell form (allows injection)
-CMD python app.py
-
-# Additional vulnerabilities
-# - No resource limits
-# - No seccomp profile
-# - No AppArmor profile
-# - Mutable filesystem
-# - No read-only root filesystem
+# VULNERABILITY #7: No HEALTHCHECK - no monitoring capability
+# VULNERABILITY #8: Shell form CMD - vulnerable to injection attacks
+CMD ["sh", "-c", "python3 app.py"]
