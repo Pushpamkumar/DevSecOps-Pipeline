@@ -1,0 +1,20 @@
+# Trivyignore file
+# List of vulnerabilities to ignore during scanning
+# Each entry consists of a CVE ID and an optional expiry date
+
+# Format: CVE-YYYY-NNNN (YYYY-MM-DD)
+# Note: Use with caution - ignoring vulnerabilities is a security risk
+
+# Example entries (uncomment to use):
+# CVE-2021-1234 2025-12-31
+# CVE-2021-5678
+
+# General guidance:
+# - Only ignore CVEs with documented mitigation strategies
+# - Always set expiry dates to force re-evaluation
+# - Document the reason for ignoring in comments
+# - Regularly review and update this file
+
+# ML Service specific ignores:
+# CVE-2018-1000656 2025-06-30 # Flask version acceptable risk
+# CVE-2015-2296 2025-06-30   # Requests version mitigated in application

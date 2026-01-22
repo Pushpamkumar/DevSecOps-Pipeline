@@ -1,0 +1,59 @@
+# INSECURE DOCKERFILE - FOR DEMONSTRATION PURPOSES ONLY
+# This Dockerfile intentionally contains security vulnerabilities
+# to demonstrate how Trivy detects and fails the build
+
+# Use old base image with known vulnerabilities
+FROM ubuntu:16.04
+
+LABEL maintainer="devsecops-demo@example.com" \
+      description="Intentionally insecure ML service for security scanning demo"
+
+# Install packages without pinning versions (security risk)
+RUN apt-get update && apt-get install -y \
+    python-pip \
+    curl \
+    wget \
+    git \
+    openssh-client \
+    openssh-server \
+    apache2 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Enable root SSH login (CRITICAL VULNERABILITY)
+RUN echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+
+# Run SSH as root (SECURITY RISK)
+RUN mkdir -p /var/run/sshd
+
+# Create app directory
+WORKDIR /app
+
+# Copy requirements and install with old pip
+COPY ml-service/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY ml-service/app.py .
+COPY ml-service/inference.py .
+
+# Create non-privileged user (MISSING - should have this)
+# Should add: RUN useradd -m appuser && chown -R appuser:appuser /app
+
+# Expose ports without documentation
+EXPOSE 5000 22 80
+
+# Run as root (SEVERE SECURITY RISK)
+USER root
+
+# No HEALTHCHECK defined
+# No logging configuration
+
+# Vulnerable CMD with shell form (allows injection)
+CMD python app.py
+
+# Additional vulnerabilities
+# - No resource limits
+# - No seccomp profile
+# - No AppArmor profile
+# - Mutable filesystem
+# - No read-only root filesystem

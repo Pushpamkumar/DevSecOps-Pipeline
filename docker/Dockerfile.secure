@@ -1,0 +1,83 @@
+# SECURE DOCKERFILE - BEST PRACTICES IMPLEMENTATION
+# This Dockerfile demonstrates security best practices
+
+# Use specific pinned base image with minimal vulnerabilities
+FROM python:3.9-slim as builder
+
+LABEL maintainer="devsecops-team@example.com" \
+      description="Secure ML inference service" \
+      version="1.0.0"
+
+# Set security options
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install only necessary system packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy and install requirements
+COPY ml-service/requirements-secure.txt .
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install -r requirements-secure.txt
+
+# Final stage
+FROM python:3.9-slim
+
+LABEL maintainer="devsecops-team@example.com" \
+      description="Secure ML inference service" \
+      version="1.0.0"
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/opt/venv/bin:$PATH"
+
+# Install only runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code
+COPY --chown=appuser:appuser ml-service/app.py .
+COPY --chown=appuser:appuser ml-service/inference.py .
+
+# Switch to non-root user
+USER appuser
+
+# Document exposed ports
+EXPOSE 5000
+
+# Add health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:5000/health || exit 1
+
+# Use exec form of ENTRYPOINT to ensure proper signal handling
+ENTRYPOINT ["python"]
+CMD ["app.py"]
+
+# Security: 
+# - Non-root user
+# - Minimal base image (slim)
+# - Pinned versions
+# - Multi-stage build
+# - Health checks
+# - No unnecessary packages
+# - Read-only filesystem support

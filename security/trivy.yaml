@@ -1,0 +1,103 @@
+# Trivy Configuration File
+# Trivy is an open-source vulnerability scanner for containers and dependencies
+
+# Scan configuration
+scan:
+  # Scan targets
+  scanners: # Set which scanners to use
+    - vuln      # Vulnerability scanning
+    - config    # Misconfigurations in config files
+    - secret    # Secrets scanning
+    - license   # License scanning
+  
+  # Concurrency for scanning parallel downloads
+  parallelism: 5
+  
+  # Timeout for API calls
+  timeout: "5m"
+
+# Vulnerability settings
+vulnerability:
+  # Severity levels to report: UNKNOWN, LOW, MEDIUM, HIGH, CRITICAL
+  severity:
+    - CRITICAL
+    - HIGH
+    - MEDIUM
+  
+  # Skip specific CVEs (use with caution)
+  skip-cves: []
+  
+  # Type of vulnerabilities to detect
+  type:
+    - os       # OS package vulnerabilities
+    - library  # Application dependency vulnerabilities
+
+# Dependency scanning
+dependency:
+  # Maximum number of vulnerabilities to report
+  max-results: 100
+
+# Reporting and filtering
+report:
+  # Template for output
+  format: json  # json, sarif, cyclonedx, template
+  
+  # Exit code behavior
+  exit-code: 1  # Non-zero exit code if vulnerabilities found
+  
+  # Ignore unmatched resources
+  ignore-unfixed: false  # Report unfixed vulnerabilities
+
+# Repository details (for private registries)
+registry:
+  # Use within Docker environment
+  # username: ""
+  # password: ""
+  # insecure: false
+
+# Severity-specific thresholds
+severity-policy:
+  CRITICAL:
+    max-allowed: 0
+    action: fail     # Fail the build
+  HIGH:
+    max-allowed: 5
+    action: warn     # Warn but continue
+  MEDIUM:
+    max-allowed: 20
+    action: log      # Just log
+
+# Custom policy rules (Enterprise feature)
+policy:
+  # Example policy enforcement
+  # Define custom rules for compliance
+  - id: "rule-001"
+    name: "No critical CVEs"
+    description: "Block builds with critical vulnerabilities"
+    severity: CRITICAL
+    action: fail
+
+  - id: "rule-002"
+    name: "Image configuration check"
+    description: "Ensure images are built from secure base images"
+    severity: HIGH
+    action: warn
+
+# Ignoring resources
+ignore:
+  # Option to ignore specific findings
+  # file: .trivyignore
+  
+  # Specific CVEs to ignore across all scans
+  unfixed: false
+
+# Database settings
+db:
+  # Repository for vulnerability database
+  repository: "ghcr.io/aquasecurity/trivy-db"
+  
+  # Check for database updates
+  skip-check-update: false
+  
+  # Cache directory for database
+  cache-dir: "/tmp/trivy-db"

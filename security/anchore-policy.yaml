@@ -1,0 +1,109 @@
+version: '1'
+metadata:
+  name: "ML Service Security Policy"
+  description: "Anchore policy for ML service container security"
+
+# Policy rules defining pass/fail conditions
+policies:
+  - id: "default-policy"
+    name: "Default Security Policy"
+    description: "Comprehensive security policy for ML service"
+    rules:
+      - id: rule-1
+        gate: DOCKERFILE
+        trigger: exposed_port
+        action: WARN
+        params:
+          - key: port
+            value: "22"
+        description: "SSH port exposed in Dockerfile (should not be exposed)"
+
+      - id: rule-2
+        gate: DOCKERFILE
+        trigger: effective_user_id
+        action: FAIL
+        params:
+          - key: user
+            value: root
+        description: "Image runs as root user (critical security issue)"
+
+      - id: rule-3
+        gate: DOCKERFILE
+        trigger: base_image_not_known
+        action: WARN
+        description: "Base image not recognized (use well-known base images)"
+
+      - id: rule-4
+        gate: VULNERABILITIES
+        trigger: vulnerability
+        action: FAIL
+        params:
+          - key: severity
+            value: "critical"
+        description: "Critical vulnerabilities found"
+
+      - id: rule-5
+        gate: VULNERABILITIES
+        trigger: vulnerability
+        action: FAIL
+        params:
+          - key: severity
+            value: "high"
+          - key: cvssv3_score
+            value: ">8.0"
+        description: "High severity vulnerabilities with CVSS > 8.0 found"
+
+      - id: rule-6
+        gate: PACKAGES
+        trigger: package_manifest_add
+        action: FAIL
+        params:
+          - key: package_type
+            value: "npm"
+          - key: specific_package_match
+            value: "vulnerable-package"
+        description: "Known vulnerable packages detected"
+
+      - id: rule-7
+        gate: SECRETSCANNING
+        trigger: secret_found
+        action: FAIL
+        description: "Sensitive secrets detected in image"
+
+      - id: rule-8
+        gate: MALWARE
+        trigger: malware_found
+        action: FAIL
+        description: "Malware signatures detected"
+
+# Exception mappings (CVEs to ignore)
+exceptions:
+  - rule_id: rule-4
+    exceptions:
+      - cve_id: CVE-2021-1234
+        reason: "Accepted risk - no exploitable path in our application"
+        expires: "2025-12-31"
+
+# Whitelists for acceptable findings
+whitelists:
+  packages:
+    - name: "npm-package-name"
+      reason: "Known false positive"
+  
+  vulnerabilities:
+    - cve: "CVE-2020-1234"
+      reason: "Not applicable to our usage"
+      expires: "2025-06-30"
+
+# Reporting configuration
+reporting:
+  output_format: "json"
+  include_pass: true
+  fail_on: "policy"
+  
+# Additional policy metadata
+metadata:
+  created: "2024-01-21"
+  updated: "2024-01-21"
+  version: "1.0"
+  maintainer: "security-team@company.com"

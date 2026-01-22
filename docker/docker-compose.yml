@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  ml-service-insecure:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.insecure
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+    volumes:
+      - /tmp/uploads:/tmp/uploads
+    # No security options - intentionally insecure
+    # No restart policy
+    # No logging configuration
+
+  ml-service-secure:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.secure
+    ports:
+      - "5001:5000"
+    environment:
+      - FLASK_ENV=production
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/tmp
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

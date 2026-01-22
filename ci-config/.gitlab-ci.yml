@@ -1,0 +1,327 @@
+# GitLab CI/CD Pipeline with DevSecOps Integration
+# This pipeline demonstrates security scanning at multiple stages
+
+image: docker:latest
+
+variables:
+  REGISTRY: "registry.gitlab.com"
+  IMAGE_NAME: "${REGISTRY}/${CI_PROJECT_NAMESPACE}/${CI_PROJECT_NAME}"
+  IMAGE_TAG: "${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}"
+  DOCKER_HOST: unix:///var/run/docker.sock
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+
+services:
+  - docker:dind
+
+stages:
+  - analyze
+  - build
+  - scan
+  - test
+  - deploy
+
+# ============================================================================
+# STAGE 1: CODE ANALYSIS
+# ============================================================================
+
+python-dependency-check:
+  stage: analyze
+  image: python:3.9
+  script:
+    - echo "Installing security scanning tools..."
+    - pip install --upgrade pip safety bandit
+    
+    - echo "Running safety check for Python dependencies..."
+    - safety check --file ml-service/requirements.txt --json > dependency-report.json || true
+    
+    - echo "Running Bandit for code security issues..."
+    - bandit -r ml-service/ -f json -o bandit-report.json || true
+    
+    - echo "Generating SBOM (Software Bill of Materials)..."
+    - pip install cyclonedx-bom
+    - cyclonedx-bom -r ml-service/requirements.txt -o sbom.json
+  
+  artifacts:
+    reports:
+      dependency_scanning: dependency-report.json
+    paths:
+      - dependency-report.json
+      - bandit-report.json
+      - sbom.json
+    expire_in: 30 days
+  
+  allow_failure: false
+  tags:
+    - docker
+
+secret-scanning:
+  stage: analyze
+  image: trufflesecurity/trufflehog:latest
+  script:
+    - echo "Scanning for secrets in source code..."
+    - trufflehog filesystem . --json --fail --max-depth 2 > secret-scan-report.json || true
+  
+  artifacts:
+    paths:
+      - secret-scan-report.json
+    expire_in: 30 days
+  
+  allow_failure: false
+  tags:
+    - docker
+
+sast-analysis:
+  stage: analyze
+  image: python:3.9
+  script:
+    - pip install semgrep
+    - echo "Running Semgrep for static analysis..."
+    - semgrep --config=p/security-audit --json ml-service/ > sast-report.json || true
+  
+  artifacts:
+    paths:
+      - sast-report.json
+    expire_in: 30 days
+  
+  allow_failure: true
+  tags:
+    - docker
+
+# ============================================================================
+# STAGE 2: BUILD
+# ============================================================================
+
+build-secure-image:
+  stage: build
+  script:
+    - echo "Building secure Docker image..."
+    - docker build -f docker/Dockerfile.secure \
+        -t ${IMAGE_NAME}:${IMAGE_TAG} \
+        -t ${IMAGE_NAME}:latest \
+        .
+    
+    - echo "Image built successfully"
+  
+  tags:
+    - docker
+
+build-insecure-image:
+  stage: build
+  script:
+    - echo "Building insecure Docker image for demonstration..."
+    - docker build -f docker/Dockerfile.insecure \
+        -t ${IMAGE_NAME}:insecure-${IMAGE_TAG} \
+        -t ${IMAGE_NAME}:insecure-latest \
+        .
+    
+    - echo "Insecure image built for testing purposes"
+  
+  allow_failure: true
+  only:
+    variables:
+      - $BUILD_INSECURE == "true"
+  tags:
+    - docker
+
+# ============================================================================
+# STAGE 3: SECURITY SCANNING
+# ============================================================================
+
+trivy-image-scan:
+  stage: scan
+  image: aquasec/trivy:latest
+  script:
+    - echo "Installing Trivy and downloading vulnerability database..."
+    
+    # Scan the secure image
+    - echo "Scanning secure image for vulnerabilities..."
+    - trivy image --config security/trivy.yaml \
+        --format json \
+        --output trivy-secure-report.json \
+        --severity CRITICAL,HIGH,MEDIUM \
+        ${IMAGE_NAME}:${IMAGE_TAG} || true
+    
+    - trivy image --format sarif \
+        --output trivy-secure-report.sarif \
+        --severity CRITICAL,HIGH,MEDIUM \
+        ${IMAGE_NAME}:${IMAGE_TAG} || true
+    
+    # Scan filesystem for misconfigurations
+    - echo "Scanning Dockerfile for misconfigurations..."
+    - trivy config --format json \
+        --output trivy-config-report.json \
+        docker/ || true
+    
+    # Generate SBOM
+    - echo "Generating Software Bill of Materials..."
+    - trivy image --format cyclonedx \
+        --output sbom-image.json \
+        ${IMAGE_NAME}:${IMAGE_TAG}
+    
+    # Create human-readable report
+    - trivy image --format table \
+        ${IMAGE_NAME}:${IMAGE_TAG}
+  
+  artifacts:
+    reports:
+      container_scanning: trivy-secure-report.json
+      sast: trivy-secure-report.sarif
+    paths:
+      - trivy-*.json
+      - trivy-*.sarif
+      - sbom-image.json
+    expire_in: 30 days
+  
+  allow_failure: false
+  tags:
+    - docker
+
+trivy-insecure-scan:
+  stage: scan
+  image: aquasec/trivy:latest
+  script:
+    - echo "Scanning insecure image (expected to fail)..."
+    
+    - trivy image --format json \
+        --output trivy-insecure-report.json \
+        --severity CRITICAL,HIGH \
+        ${IMAGE_NAME}:insecure-${IMAGE_TAG} || true
+    
+    - echo "Number of critical/high vulnerabilities found:"
+    - grep -o '"Severity":"CRITICAL"' trivy-insecure-report.json | wc -l
+    
+    - echo "This build demonstrates the security gates that would prevent deployment"
+  
+  artifacts:
+    paths:
+      - trivy-insecure-report.json
+    expire_in: 30 days
+  
+  allow_failure: true
+  only:
+    variables:
+      - $BUILD_INSECURE == "true"
+  tags:
+    - docker
+
+anchore-image-scan:
+  stage: scan
+  image: anchore/anchore-engine:latest
+  script:
+    - echo "Scanning with Anchore Engine..."
+    - anchore-cli image add ${IMAGE_NAME}:${IMAGE_TAG}
+    - anchore-cli image wait ${IMAGE_NAME}:${IMAGE_TAG}
+    
+    - echo "Running policy evaluation..."
+    - anchore-cli policy eval ${IMAGE_NAME}:${IMAGE_TAG} \
+        --policy security/anchore-policy.yaml \
+        --output-format json > anchore-report.json || true
+    
+    - echo "Scanning for vulnerabilities..."
+    - anchore-cli image vuln ${IMAGE_NAME}:${IMAGE_TAG} all > anchore-vulns.json || true
+  
+  artifacts:
+    paths:
+      - anchore-report.json
+      - anchore-vulns.json
+    expire_in: 30 days
+  
+  allow_failure: true
+  tags:
+    - docker
+
+# ============================================================================
+# STAGE 4: TESTS
+# ============================================================================
+
+unit-tests:
+  stage: test
+  image: python:3.9
+  script:
+    - echo "Running unit tests..."
+    - pip install pytest pytest-cov
+    - pytest --cov=ml-service --cov-report=term --cov-report=json tests/ || true
+  
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    paths:
+      - coverage.json
+    expire_in: 30 days
+  
+  allow_failure: true
+  tags:
+    - docker
+
+container-runtime-test:
+  stage: test
+  script:
+    - echo "Running container runtime tests..."
+    - docker run --rm ${IMAGE_NAME}:${IMAGE_TAG} python -m pytest --version || true
+    - docker run --rm ${IMAGE_NAME}:${IMAGE_TAG} python -c "import flask; print('Flask imported successfully')" || true
+  
+  tags:
+    - docker
+
+# ============================================================================
+# STAGE 5: DEPLOYMENT
+# ============================================================================
+
+push-to-registry:
+  stage: deploy
+  script:
+    - echo "Pushing image to registry..."
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker push ${IMAGE_NAME}:${IMAGE_TAG}
+    - docker push ${IMAGE_NAME}:latest
+    - echo "Image pushed: ${IMAGE_NAME}:${IMAGE_TAG}"
+  
+  only:
+    - main
+    - develop
+  tags:
+    - docker
+
+# ============================================================================
+# REPORTING AND NOTIFICATIONS
+# ============================================================================
+
+generate-security-report:
+  stage: deploy
+  image: python:3.9
+  script:
+    - echo "Generating consolidated security report..."
+    - pip install jinja2 pyyaml
+    - python scripts/generate-report.py
+  
+  artifacts:
+    paths:
+      - security-report.html
+      - security-report.md
+    expire_in: 60 days
+  
+  allow_failure: true
+  tags:
+    - docker
+
+# ============================================================================
+# Pipeline configuration
+# ============================================================================
+
+before_script:
+  - echo "Pipeline started at $(date)"
+  - echo "Commit: ${CI_COMMIT_SHA}"
+  - echo "Branch: ${CI_COMMIT_REF_NAME}"
+
+after_script:
+  - echo "Pipeline completed at $(date)"
+
+# Only run pipeline on merge requests and main branches
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_COMMIT_TAG'

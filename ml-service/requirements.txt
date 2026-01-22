@@ -1,0 +1,16 @@
+# ML Service Dependencies with Known Vulnerabilities (for demonstration)
+# These versions contain known CVEs that will be detected by Trivy
+
+# Vulnerable versions intentionally included for security scanning demo
+flask==0.12.3  # CVE-2018-1000656 - Insufficient entropy in generate_password_hash
+werkzeug==0.11.0  # Multiple security vulnerabilities
+jinja2==2.7.2  # CVE-2016-10516 - Sandbox escape vulnerability
+requests==2.5.1  # CVE-2015-2296 - Unverified hostname SSL match
+pyyaml==5.1  # CVE-2020-1747 - Arbitrary code execution
+pillow==2.5.0  # CVE-2014-1932, CVE-2014-1933 - Image format vulnerabilities
+numpy==1.8.0  # Multiple vulnerability issues
+scipy==0.12.0  # Compatibility issues with vulnerable numpy
+pandas==0.11.0  # Data processing with vulnerabilities
+scikit-learn==0.14.1  # ML framework with dependency vulnerabilities
+tensorflow==1.0.0  # CVE-2017-3506 - TensorFlow vulnerability
+cryptography==0.7  # CVE-2015-3206 - ECDSA signature forgery
